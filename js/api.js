@@ -10,7 +10,7 @@ const API = {
 
     const url = new URL(CONFIG.API_URL);
     url.searchParams.set('action', action);
-    url.searchParams.set('senha', CONFIG.SENHA);
+    url.searchParams.set('senha', sessionStorage.getItem('ogrupo_senha') || '');
 
     Object.entries(params).forEach(([k, v]) => {
       if (v !== undefined && v !== null) {

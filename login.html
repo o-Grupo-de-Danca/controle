@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>oGrupo de Dança — Entrar</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-violet-700 min-h-screen flex items-center justify-center p-4">
+
+  <div class="bg-white rounded-3xl shadow-xl w-full max-w-sm p-8">
+    <div class="text-center mb-8">
+      <div class="text-5xl mb-3">💃</div>
+      <h1 class="text-2xl font-bold text-gray-800">oGrupo de Dança</h1>
+      <p class="text-gray-500 text-sm mt-1">Digite a senha para continuar</p>
+    </div>
+
+    <form onsubmit="entrar(event)" class="space-y-4">
+      <input
+        type="password"
+        id="senha"
+        placeholder="Senha"
+        autocomplete="current-password"
+        required
+        class="w-full border border-gray-200 rounded-xl px-4 py-3 text-gray-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 text-center text-lg tracking-widest"
+      >
+
+      <p id="erro" class="hidden text-red-500 text-sm text-center">Senha incorreta. Tente novamente.</p>
+
+      <button type="submit" id="btn"
+        class="w-full py-3 bg-violet-600 text-white rounded-xl font-semibold hover:bg-violet-700 active:scale-95 transition-all text-lg">
+        Entrar
+      </button>
+    </form>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script>
+    // Se já estiver autenticado, vai direto para o início
+    if (sessionStorage.getItem('ogrupo_senha')) {
+      location.replace('index.html');
+    }
+
+    async function entrar(e) {
+      e.preventDefault();
+      const btn   = document.getElementById('btn');
+      const erro  = document.getElementById('erro');
+      const senha = document.getElementById('senha').value;
+
+      btn.textContent = 'Verificando...';
+      btn.disabled = true;
+      erro.classList.add('hidden');
+
+      try {
+        // Testa a senha tentando buscar os alunos
+        const url = new URL(CONFIG.API_URL);
+        url.searchParams.set('action', 'getAlunos');
+        url.searchParams.set('senha', senha);
+        const res  = await fetch(url.toString());
+        const data = await res.json();
+
+        if (data.error === 'Não autorizado') {
+          erro.classList.remove('hidden');
+        } else {
+          // Senha correta — salva na sessão e redireciona
+          sessionStorage.setItem('ogrupo_senha', senha);
+          location.replace('index.html');
+        }
+      } catch (err) {
+        erro.textContent = 'Erro de conexão: ' + err.message;
+        erro.classList.remove('hidden');
+      } finally {
+        btn.textContent = 'Entrar';
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

@@ -77,6 +77,8 @@
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
   <script>
+    if (!sessionStorage.getItem('ogrupo_senha')) location.replace('login.html');
+
     let todasFaturas = [];
     let todosAlunos  = [];
     let filtroAtivo  = 'vencida';
