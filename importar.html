@@ -171,41 +171,68 @@
       const linhas = texto.trim().split(/\r?\n/);
       if (linhas.length < 2) return [];
 
-      // Detectar separador
-      const sep = linhas[0].includes(';') ? ';' : ',';
-      const headers = linhas[0].split(sep).map(h => h.replace(/"/g,'').trim().toLowerCase());
+      // Detectar separador (pega da primeira linha com múltiplos campos)
+      const sep = linhas.slice(0, 10).find(l => l.includes(';')) ? ';' : ',';
 
-      // Mapear colunas por nome
+      // Localizar linha de cabeçalho real (arquivos bancários têm linhas de
+      // metadados antes: título, conta, período, saldo...)
+      // Procura a primeira linha que contenha "data" E "valor"
+      let headerIdx = -1;
+      for (let i = 0; i < Math.min(linhas.length, 15); i++) {
+        const l = linhas[i].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+        if (l.includes('data') && l.includes('valor')) { headerIdx = i; break; }
+      }
+      if (headerIdx === -1) throw new Error('Cabeçalho não encontrado. Verifique se o arquivo tem colunas "Data" e "Valor".');
+
+      const headers = linhas[headerIdx].split(sep).map(h =>
+        h.replace(/"/g,'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      );
+
+      // Mapear colunas
       const idx = {
-        data:      encontrarCol(headers, ['data','date','dt','data lançamento','data movimentação']),
-        valor:     encontrarCol(headers, ['valor','amount','credito','crédito','entrada','value']),
-        descricao: encontrarCol(headers, ['descrição','descricao','description','memo','histórico','historico','lançamento']),
+        data:      encontrarCol(headers, ['data lancamento','data movimentacao','data','date','dt']),
+        historico: encontrarCol(headers, ['historico','tipo','lancamento']),
+        descricao: encontrarCol(headers, ['descricao','description','memo','nome','beneficiario']),
+        valor:     encontrarCol(headers, ['valor','amount','credito','entrada','value']),
       };
 
       if (idx.valor === -1) throw new Error('Coluna de valor não encontrada no CSV.');
 
       const transacoes = [];
-      linhas.slice(1).forEach((linha, i) => {
+      linhas.slice(headerIdx + 1).forEach((linha, i) => {
         if (!linha.trim()) return;
         const cols = splitCSVLinha(linha, sep);
+        if (cols.length < 2) return;
 
-        const valorRaw = cols[idx.valor] || '';
-        const valor = parseFloat(
-          valorRaw.replace(/"/g,'').replace('R$','').replace(/\./g,'').replace(',','.').trim()
-        );
-        if (!valor || valor <= 0) return; // só créditos / valores positivos
+        // Valor: formato brasileiro "1.234,56" ou "-180,00"
+        const valorRaw = (cols[idx.valor] || '').replace(/"/g,'').replace('R$','').trim();
+        const valor = parseFloat(valorRaw.replace(/\./g,'').replace(',','.'));
+        if (!valor || valor <= 0) return; // só créditos
 
         const dataRaw = idx.data !== -1 ? (cols[idx.data] || '').replace(/"/g,'').trim() : '';
         const data    = normalizarData(dataRaw);
-        const desc    = idx.descricao !== -1 ? (cols[idx.descricao] || '').replace(/"/g,'').trim() : '';
+
+        // Descrição: coluna "Descrição" tem o nome; se não existe, tenta "Histórico"
+        const descBruta = (
+          (idx.descricao !== -1 ? cols[idx.descricao] : '') ||
+          (idx.historico !== -1 ? cols[idx.historico] : '') ||
+          ''
+        ).replace(/"/g,'').trim();
+
+        // Remove prefixo numérico de CPF/CNPJ quando presente
+        // ex: "45.890.841 Nathalia Cristina..." → "Nathalia Cristina..."
+        const nomeLimpo = descBruta.replace(/^[\d]{2,3}[\.\s]?\d{3}[\.\s]?\d{3}[\.\s\-]?\d*\s+/, '').trim();
+
+        // ID único: data + valor + índice (sem FITID no CSV)
+        const id = `csv-${data}-${valorRaw.replace(/[^0-9,]/g,'')}-${i}`;
 
         transacoes.push({
-          id:        `csv-${i}-${data}-${valor}`,
+          id,
           data,
           valor,
-          descricao: desc,
-          pagador:   extrairNomePix(desc),
-          cpf:       extrairCPF(desc),
+          descricao: descBruta,
+          pagador:   nomeLimpo || extrairNomePix(descBruta),
+          cpf:       extrairCPF(descBruta),
         });
       });
       return transacoes;
