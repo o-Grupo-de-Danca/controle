@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Importar Extrato — oGrupo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 max-w-lg mx-auto min-h-screen pb-24">
+
+  <div id="toast" class="hidden"></div>
+
+  <header class="bg-violet-700 text-white px-4 py-4 sticky top-0 z-40 shadow">
+    <h1 class="text-xl font-bold">Importar Extrato</h1>
+    <p class="text-violet-200 text-sm">CSV ou OFX — PIX recebidos</p>
+  </header>
+
+  <main class="p-4 space-y-4">
+
+    <!-- ETAPA 1: Upload -->
+    <div id="etapa-upload" class="space-y-4">
+      <div class="bg-white rounded-2xl p-4 shadow-sm space-y-3">
+        <p class="text-sm text-gray-600">
+          Exporte o extrato do seu banco (Nubank, Inter, Itaú, etc.) em formato <strong>CSV</strong> ou <strong>OFX</strong> e envie abaixo.
+        </p>
+
+        <label id="area-upload"
+          class="flex flex-col items-center justify-center border-2 border-dashed border-violet-300 rounded-2xl p-8 cursor-pointer hover:bg-violet-50 transition-colors">
+          <span class="text-4xl mb-2">📂</span>
+          <span class="text-violet-700 font-medium">Clique para escolher o arquivo</span>
+          <span class="text-gray-400 text-xs mt-1">.csv ou .ofx</span>
+          <input type="file" id="arquivo" accept=".csv,.ofx,.txt" class="hidden" onchange="processarArquivo()">
+        </label>
+
+        <p id="nome-arquivo" class="hidden text-center text-sm text-gray-500"></p>
+      </div>
+    </div>
+
+    <!-- ETAPA 2: Revisão das transações -->
+    <div id="etapa-revisao" class="hidden space-y-4">
+
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-semibold text-gray-700">Transações encontradas</h2>
+          <button onclick="voltarUpload()" class="text-sm text-violet-600 hover:underline">← Trocar arquivo</button>
+        </div>
+
+        <!-- Resumo -->
+        <div id="resumo-import" class="grid grid-cols-3 gap-2 mb-4 text-center text-xs"></div>
+
+        <!-- Lista de transações -->
+        <div id="lista-transacoes" class="space-y-3"></div>
+
+        <!-- Botão confirmar -->
+        <button id="btn-confirmar" onclick="confirmarImportacao()"
+          class="w-full mt-4 py-3 bg-violet-600 text-white rounded-xl font-semibold hover:bg-violet-700 active:scale-95 transition-all disabled:opacity-50">
+          ✅ Confirmar selecionados
+        </button>
+      </div>
+    </div>
+
+    <!-- ETAPA 3: Resultado -->
+    <div id="etapa-resultado" class="hidden">
+      <div class="bg-white rounded-2xl p-6 shadow-sm text-center space-y-3">
+        <div class="text-5xl">🎉</div>
+        <h2 class="text-xl font-bold text-gray-800">Importação concluída!</h2>
+        <p id="resultado-msg" class="text-gray-600"></p>
+        <button onclick="novaImportacao()"
+          class="w-full py-3 bg-violet-600 text-white rounded-xl font-semibold hover:bg-violet-700 mt-2">
+          Importar outro extrato
+        </button>
+        <a href="faturas.html" class="block w-full py-3 bg-violet-50 text-violet-700 rounded-xl font-semibold hover:bg-violet-100">
+          Ver faturas
+        </a>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Bottom nav -->
+  <nav class="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white border-t border-gray-200 flex justify-around py-2 z-50">
+    <a href="index.html"  class="flex flex-col items-center text-xs text-gray-500 hover:text-violet-700"><span class="text-2xl">🏠</span><span>Início</span></a>
+    <a href="alunos.html" class="flex flex-col items-center text-xs text-gray-500 hover:text-violet-700"><span class="text-2xl">👥</span><span>Alunos</span></a>
+    <a href="turmas.html" class="flex flex-col items-center text-xs text-gray-500 hover:text-violet-700"><span class="text-2xl">💃</span><span>Turmas</span></a>
+    <a href="faturas.html" class="flex flex-col items-center text-xs text-gray-500 hover:text-violet-700"><span class="text-2xl">📄</span><span>Faturas</span></a>
+  </nav>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    if (!sessionStorage.getItem('ogrupo_senha')) location.replace('login.html');
+
+    // ── Estado global ──────────────────────────────────────
+    let todosAlunos      = [];
+    let todasFaturas     = [];
+    let todosPagamentos  = [];
+    let transacoesParsed = []; // transações do arquivo
+
+    // ── Carregar dados ao abrir ────────────────────────────
+    async function carregarDados() {
+      try {
+        [todosAlunos, todasFaturas, todosPagamentos] = await Promise.all([
+          API.getAlunos(), API.getFaturas(), API.getPagamentos()
+        ]);
+      } catch (err) {
+        Utils.mostrarErro('Erro ao carregar dados: ' + err.message);
+      }
+    }
+    carregarDados();
+
+    // ── Processamento do arquivo ───────────────────────────
+    function processarArquivo() {
+      const input = document.getElementById('arquivo');
+      const file  = input.files[0];
+      if (!file) return;
+
+      document.getElementById('nome-arquivo').textContent = file.name;
+      document.getElementById('nome-arquivo').classList.remove('hidden');
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        const texto = e.target.result;
+        const ext   = file.name.split('.').pop().toLowerCase();
+        try {
+          transacoesParsed = ext === 'ofx' ? parseOFX(texto) : parseCSV(texto);
+          if (transacoesParsed.length === 0) {
+            Utils.mostrarErro('Nenhuma transação encontrada no arquivo.');
+            return;
+          }
+          mostrarRevisao(transacoesParsed);
+        } catch (err) {
+          Utils.mostrarErro('Erro ao ler arquivo: ' + err.message);
+        }
+      };
+      reader.readAsText(file, 'UTF-8');
+    }
+
+    // ── Parser OFX ────────────────────────────────────────
+    function parseOFX(texto) {
+      const transacoes = [];
+      // Regex para blocos <STMTTRN>...</STMTTRN>
+      const blocos = texto.match(/<STMTTRN>[\s\S]*?<\/STMTTRN>/gi) || [];
+
+      blocos.forEach(bloco => {
+        const get = tag => {
+          const m = bloco.match(new RegExp(`<${tag}>([^<\r\n]+)`, 'i'));
+          return m ? m[1].trim() : '';
+        };
+        const valor = parseFloat(get('TRNAMT').replace(',', '.'));
+        if (valor <= 0) return; // só créditos
+
+        const dtRaw = get('DTPOSTED'); // ex: 20250415
+        const data  = dtRaw.length >= 8
+          ? `${dtRaw.slice(0,4)}-${dtRaw.slice(4,6)}-${dtRaw.slice(6,8)}`
+          : '';
+
+        transacoes.push({
+          id:        get('FITID') || `${data}-${valor}`,
+          data,
+          valor,
+          descricao: get('MEMO') || get('NAME') || '',
+          pagador:   extrairNomePix(get('MEMO') || get('NAME') || ''),
+          cpf:       extrairCPF(get('MEMO') || ''),
+        });
+      });
+      return transacoes;
+    }
+
+    // ── Parser CSV ────────────────────────────────────────
+    function parseCSV(texto) {
+      const linhas = texto.trim().split(/\r?\n/);
+      if (linhas.length < 2) return [];
+
+      // Detectar separador
+      const sep = linhas[0].includes(';') ? ';' : ',';
+      const headers = linhas[0].split(sep).map(h => h.replace(/"/g,'').trim().toLowerCase());
+
+      // Mapear colunas por nome
+      const idx = {
+        data:      encontrarCol(headers, ['data','date','dt','data lançamento','data movimentação']),
+        valor:     encontrarCol(headers, ['valor','amount','credito','crédito','entrada','value']),
+        descricao: encontrarCol(headers, ['descrição','descricao','description','memo','histórico','historico','lançamento']),
+      };
+
+      if (idx.valor === -1) throw new Error('Coluna de valor não encontrada no CSV.');
+
+      const transacoes = [];
+      linhas.slice(1).forEach((linha, i) => {
+        if (!linha.trim()) return;
+        const cols = splitCSVLinha(linha, sep);
+
+        const valorRaw = cols[idx.valor] || '';
+        const valor = parseFloat(
+          valorRaw.replace(/"/g,'').replace('R$','').replace(/\./g,'').replace(',','.').trim()
+        );
+        if (!valor || valor <= 0) return; // só créditos / valores positivos
+
+        const dataRaw = idx.data !== -1 ? (cols[idx.data] || '').replace(/"/g,'').trim() : '';
+        const data    = normalizarData(dataRaw);
+        const desc    = idx.descricao !== -1 ? (cols[idx.descricao] || '').replace(/"/g,'').trim() : '';
+
+        transacoes.push({
+          id:        `csv-${i}-${data}-${valor}`,
+          data,
+          valor,
+          descricao: desc,
+          pagador:   extrairNomePix(desc),
+          cpf:       extrairCPF(desc),
+        });
+      });
+      return transacoes;
+    }
+
+    function splitCSVLinha(linha, sep) {
+      const result = [];
+      let cur = '', dentro = false;
+      for (let c of linha) {
+        if (c === '"') { dentro = !dentro; continue; }
+        if (c === sep && !dentro) { result.push(cur); cur = ''; continue; }
+        cur += c;
+      }
+      result.push(cur);
+      return result;
+    }
+
+    function encontrarCol(headers, opcoes) {
+      for (const op of opcoes) {
+        const i = headers.findIndex(h => h.includes(op));
+        if (i !== -1) return i;
+      }
+      return -1;
+    }
+
+    function normalizarData(raw) {
+      if (!raw) return '';
+      // dd/mm/yyyy → yyyy-mm-dd
+      const m1 = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+      if (m1) return `${m1[3]}-${m1[2]}-${m1[1]}`;
+      // yyyy-mm-dd (já ok)
+      const m2 = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m2) return raw.slice(0, 10);
+      return raw.slice(0, 10);
+    }
+
+    // ── Extratores de texto PIX ────────────────────────────
+    function extrairNomePix(desc) {
+      if (!desc) return '';
+      // "PIX RECEBIDO - NOME DA PESSOA"
+      const m1 = desc.match(/PIX\s+(?:RECEBIDO|CREDIT|REC)[^-]*-\s*(.+)/i);
+      if (m1) return m1[1].replace(/CPF.*/, '').replace(/\d{3}\.\d{3}.*/, '').trim();
+      // "Pix de NOME"
+      const m2 = desc.match(/Pix\s+de\s+(.+)/i);
+      if (m2) return m2[1].split(/\s{2,}|\/|\|/)[0].trim();
+      // "TED/DOC - NOME"
+      const m3 = desc.match(/(?:TED|DOC|TRANSF)\s*[-–]\s*(.+)/i);
+      if (m3) return m3[1].split(/\s{2,}/)[0].trim();
+      return '';
+    }
+
+    function extrairCPF(desc) {
+      const m = desc.match(/\d{3}[\.\s]?\d{3}[\.\s]?\d{3}[\-\s]?\d{2}/);
+      return m ? m[0].replace(/\D/g, '') : '';
+    }
+
+    // ── Casamento com alunos ───────────────────────────────
+    function tokenizar(str) {
+      return (str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z\s]/g, '').trim().split(/\s+/).filter(Boolean);
+    }
+
+    function similaridade(a, b) {
+      const ta = new Set(tokenizar(a));
+      const tb = new Set(tokenizar(b));
+      if (ta.size === 0 || tb.size === 0) return 0;
+      let intersecao = 0;
+      ta.forEach(t => { if (tb.has(t)) intersecao++; });
+      return intersecao / Math.max(ta.size, tb.size);
+    }
+
+    function casarComAluno(transacao) {
+      // 1. Por CPF exato — aluno
+      if (transacao.cpf && transacao.cpf.length >= 11) {
+        const porAluno = todosAlunos.find(a =>
+          (a.cpf || '').replace(/\D/g,'') === transacao.cpf
+        );
+        if (porAluno) return { aluno: porAluno, score: 1.0, metodo: 'CPF', via: 'aluno' };
+
+        // Por CPF do responsável
+        const porResp = todosAlunos.find(a =>
+          (a.resp_cpf || '').replace(/\D/g,'') === transacao.cpf
+        );
+        if (porResp) return { aluno: porResp, score: 1.0, metodo: 'CPF', via: 'responsável' };
+      }
+
+      // 2. Por nome (pagador extraído ou descrição)
+      const nomeRef = transacao.pagador || transacao.descricao;
+      if (!nomeRef) return null;
+
+      let melhor = null, melhorScore = 0, melhorVia = 'aluno';
+      todosAlunos.forEach(a => {
+        const scoreAluno = similaridade(nomeRef, a.nome);
+        const scoreResp  = a.resp_nome ? similaridade(nomeRef, a.resp_nome) : 0;
+        if (scoreAluno >= scoreResp && scoreAluno > melhorScore) {
+          melhorScore = scoreAluno; melhor = a; melhorVia = 'aluno';
+        } else if (scoreResp > scoreAluno && scoreResp > melhorScore) {
+          melhorScore = scoreResp; melhor = a; melhorVia = 'responsável';
+        }
+      });
+
+      if (melhorScore >= 0.5) return { aluno: melhor, score: melhorScore, metodo: 'Nome', via: melhorVia };
+      return null;
+    }
+
+    // ── Verificação de duplicidade ─────────────────────────
+    function isDuplicata(transacao) {
+      // Verifica se já existe pagamento com mesma data e valor para o mesmo ID
+      return todosPagamentos.some(p =>
+        String(p.descricao).includes(transacao.id) ||
+        (String(p.data) === transacao.data && parseFloat(p.valor) === transacao.valor)
+      );
+    }
+
+    // ── Sugerir fatura ────────────────────────────────────
+    function sugerirFatura(aluno, valor) {
+      const pendentes = todasFaturas.filter(f =>
+        String(f.aluno_id) === String(aluno.id) &&
+        f.status === 'pendente'
+      );
+      // Prefere a fatura cujo valor mais se aproxima
+      if (pendentes.length === 0) return null;
+      return pendentes.sort((a, b) =>
+        Math.abs(parseFloat(a.valor) - valor) - Math.abs(parseFloat(b.valor) - valor)
+      )[0];
+    }
+
+    // ── Renderizar revisão ────────────────────────────────
+    function mostrarRevisao(transacoes) {
+      let nDuplicatas = 0, nCasados = 0, nSemCasamento = 0;
+
+      const items = transacoes.map((t, i) => {
+        const duplicata = isDuplicata(t);
+        const match     = duplicata ? null : casarComAluno(t);
+        const fatura    = match ? sugerirFatura(match.aluno, t.valor) : null;
+
+        if (duplicata) nDuplicatas++;
+        else if (match) nCasados++;
+        else nSemCasamento++;
+
+        return { t, i, duplicata, match, fatura };
+      });
+
+      // Resumo
+      document.getElementById('resumo-import').innerHTML = `
+        <div class="bg-green-50 rounded-xl p-2">
+          <p class="font-bold text-green-700 text-base">${nCasados}</p>
+          <p class="text-green-600">Identificados</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-2">
+          <p class="font-bold text-gray-500 text-base">${nSemCasamento}</p>
+          <p class="text-gray-400">Não identificados</p>
+        </div>
+        <div class="bg-orange-50 rounded-xl p-2">
+          <p class="font-bold text-orange-500 text-base">${nDuplicatas}</p>
+          <p class="text-orange-400">Duplicatas</p>
+        </div>
+      `;
+
+      // Lista
+      const lista = document.getElementById('lista-transacoes');
+      lista.innerHTML = '';
+
+      // Ordena: identificados primeiro, depois sem casamento, duplicatas por último
+      items.sort((a, b) => {
+        const ordem = x => x.duplicata ? 2 : (x.match ? 0 : 1);
+        return ordem(a) - ordem(b);
+      });
+
+      items.forEach(({ t, i, duplicata, match, fatura }) => {
+        const card = document.createElement('div');
+        card.className = `rounded-xl border-2 p-3 ${
+          duplicata ? 'border-orange-200 bg-orange-50 opacity-60' :
+          match     ? 'border-green-200 bg-green-50' :
+                      'border-gray-200 bg-white'
+        }`;
+
+        const alunoOpts = todosAlunos
+          .filter(a => String(a.ativo) !== 'false')
+          .map(a => `<option value="${a.id}" ${match && a.id === match.aluno.id ? 'selected' : ''}>${a.nome}</option>`)
+          .join('');
+
+        const faturaOpts = match
+          ? todasFaturas
+              .filter(f => String(f.aluno_id) === String(match.aluno.id) && f.status === 'pendente')
+              .map(f => `<option value="${f.id}" ${fatura && f.id === fatura.id ? 'selected' : ''}>${Utils.formatarMes(f.mes)} — ${Utils.formatarValor(f.valor)}</option>`)
+              .join('')
+          : '';
+
+        card.innerHTML = `
+          <div class="flex items-start justify-between mb-2">
+            <div class="min-w-0 pr-2">
+              <p class="font-semibold text-gray-800 text-sm truncate">
+                ${t.pagador || t.descricao.slice(0, 40) || '(sem descrição)'}
+              </p>
+              <p class="text-xs text-gray-500">${Utils.formatarData(t.data)} · ${t.descricao.slice(0,50)}</p>
+            </div>
+            <p class="font-bold text-green-700 text-sm whitespace-nowrap">${Utils.formatarValor(t.valor)}</p>
+          </div>
+
+          ${duplicata ? `
+            <p class="text-xs text-orange-600 font-medium">⚠️ Já importado anteriormente — ignorado</p>
+          ` : `
+            <div class="space-y-2 mt-2">
+              <div class="flex items-center gap-2">
+                <input type="checkbox" id="sel-${i}" ${match ? 'checked' : ''} class="w-4 h-4 accent-violet-600">
+                <label for="sel-${i}" class="text-xs font-medium text-gray-700">
+                  ${match ? (() => {
+                      const conf = match.metodo === 'CPF'
+                        ? `CPF (${match.via})`
+                        : `Nome ${Math.round(match.score*100)}% (${match.via})`;
+                      const nomeMatch = match.via === 'responsável'
+                        ? `${match.aluno.resp_nome} → <span class="text-violet-700">${match.aluno.nome}</span>`
+                        : `<span class="text-violet-700">${match.aluno.nome}</span>`;
+                      return `✅ ${conf} — ${nomeMatch}`;
+                    })()
+                    : '⚪ Selecionar para importar'}
+                </label>
+              </div>
+
+              <select id="aluno-${i}" class="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs"
+                onchange="atualizarFaturas(${i})">
+                <option value="">— Selecionar aluno —</option>
+                ${alunoOpts}
+              </select>
+
+              <select id="fatura-${i}" class="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs">
+                <option value="">— Sem fatura vinculada —</option>
+                ${faturaOpts}
+              </select>
+            </div>
+          `}
+        `;
+        lista.appendChild(card);
+      });
+
+      // Guardar items processados para usar no confirmar
+      window._itemsImport = items;
+
+      document.getElementById('etapa-upload').classList.add('hidden');
+      document.getElementById('etapa-revisao').classList.remove('hidden');
+    }
+
+    function atualizarFaturas(i) {
+      const alunoId = document.getElementById(`aluno-${i}`).value;
+      const sel     = document.getElementById(`fatura-${i}`);
+      sel.innerHTML = '<option value="">— Sem fatura vinculada —</option>';
+      if (!alunoId) return;
+      todasFaturas
+        .filter(f => String(f.aluno_id) === String(alunoId) && f.status === 'pendente')
+        .forEach(f => {
+          const opt = document.createElement('option');
+          opt.value = f.id;
+          opt.textContent = `${Utils.formatarMes(f.mes)} — ${Utils.formatarValor(f.valor)}`;
+          sel.appendChild(opt);
+        });
+    }
+
+    // ── Confirmar importação ──────────────────────────────
+    async function confirmarImportacao() {
+      const btn = document.getElementById('btn-confirmar');
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+
+      const items   = window._itemsImport;
+      let salvos    = 0;
+      let erros     = 0;
+
+      for (let idx = 0; idx < items.length; idx++) {
+        const { t, i, duplicata } = items[idx];
+        if (duplicata) continue;
+
+        const checkbox = document.getElementById(`sel-${idx}`);
+        if (!checkbox || !checkbox.checked) continue;
+
+        const alunoId  = document.getElementById(`aluno-${idx}`)?.value || '';
+        const faturaId = document.getElementById(`fatura-${idx}`)?.value || '';
+        if (!alunoId) continue;
+
+        try {
+          await API.savePagamento({
+            fatura_id:  faturaId,
+            data:       t.data,
+            valor:      t.valor,
+            descricao:  `${t.descricao} [id:${t.id}]`,
+            metodo:     'pix',
+          });
+          if (faturaId) {
+            await API.updateFatura(faturaId, { status: 'pago' });
+          }
+          salvos++;
+        } catch (err) {
+          erros++;
+        }
+      }
+
+      // Atualiza pagamentos locais para detectar duplicatas se importar de novo
+      todosPagamentos = await API.getPagamentos();
+
+      document.getElementById('resultado-msg').textContent =
+        `${salvos} pagamento(s) registrado(s).` +
+        (erros > 0 ? ` ${erros} erro(s).` : '');
+
+      document.getElementById('etapa-revisao').classList.add('hidden');
+      document.getElementById('etapa-resultado').classList.remove('hidden');
+      btn.disabled = false;
+      btn.textContent = '✅ Confirmar selecionados';
+    }
+
+    function voltarUpload() {
+      document.getElementById('etapa-revisao').classList.add('hidden');
+      document.getElementById('etapa-upload').classList.remove('hidden');
+      document.getElementById('arquivo').value = '';
+      document.getElementById('nome-arquivo').classList.add('hidden');
+    }
+
+    function novaImportacao() {
+      document.getElementById('etapa-resultado').classList.add('hidden');
+      document.getElementById('etapa-upload').classList.remove('hidden');
+      document.getElementById('arquivo').value = '';
+      document.getElementById('nome-arquivo').classList.add('hidden');
+    }
+  </script>
+</body>
+</html>
