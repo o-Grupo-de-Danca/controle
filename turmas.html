@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Turmas — oGrupo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 max-w-lg mx-auto min-h-screen pb-24">
+
+  <div id="toast" class="hidden"></div>
+
+  <header class="bg-violet-700 text-white px-4 py-4 sticky top-0 z-40 shadow">
+    <div class="flex items-center justify-between">
+      <h1 class="text-xl font-bold">Turmas</h1>
+      <button onclick="document.getElementById('form-nova').classList.toggle('hidden')"
+        class="bg-white text-violet-700 font-bold px-4 py-1.5 rounded-xl text-sm hover:bg-violet-50">
+        + Nova
+      </button>
+    </div>
+  </header>
+
+  <main class="p-4 space-y-4">
+
+    <!-- Formulário nova turma (collapsible) -->
+    <div id="form-nova" class="hidden bg-white rounded-2xl p-4 shadow-sm">
+      <h2 class="font-semibold text-gray-700 mb-3">Nova turma</h2>
+      <form onsubmit="salvarTurma(event)" class="space-y-2">
+        <input type="text" id="t-nome" placeholder="Nome da turma *" required class="inp">
+        <div class="flex gap-2">
+          <input type="text" id="t-modalidade" placeholder="Modalidade (ex: Ballet)" class="inp flex-1">
+          <input type="number" id="t-mensalidade" placeholder="Mensalidade R$" step="0.01" required class="inp flex-1">
+        </div>
+        <div class="flex gap-2">
+          <select id="t-dia" class="inp flex-1">
+            <option value="">Dia da semana</option>
+            <option>Segunda</option><option>Terça</option><option>Quarta</option>
+            <option>Quinta</option><option>Sexta</option><option>Sábado</option><option>Domingo</option>
+          </select>
+          <input type="text" id="t-horario" placeholder="Horário (ex: 19h)" class="inp flex-1">
+        </div>
+        <div class="flex gap-2 pt-1">
+          <button type="button" onclick="document.getElementById('form-nova').classList.add('hidden')"
+            class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium">Cancelar</button>
+          <button type="submit" id="btn-salvar-turma"
+            class="flex-1 py-3 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700">Salvar</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading" class="text-center py-12 text-gray-400"><div class="text-4xl mb-2">⏳</div><p>Carregando...</p></div>
+
+    <!-- Lista de turmas -->
+    <div id="lista-turmas" class="hidden space-y-3"></div>
+    <p id="vazio" class="hidden text-center text-gray-400 py-8">Nenhuma turma cadastrada.</p>
+
+  </main>
+
+  <!-- Bottom nav -->
+  <nav class="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white border-t border-gray-200 flex justify-around py-2 z-50">
+    <a href="index.html" class="flex flex-col items-center text-xs text-gray-500 hover:text-violet-700">
+      <span class="text-2xl">🏠</span><span>Início</span>
+    </a>
+    <a href="alunos.html" class="flex flex-col items-center text-xs text-gray-500 hover:text-violet-700">
+      <span class="text-2xl">👥</span><span>Alunos</span>
+    </a>
+    <a href="turmas.html" class="flex flex-col items-center text-xs text-violet-700 font-medium">
+      <span class="text-2xl">💃</span><span>Turmas</span>
+    </a>
+    <a href="faturas.html" class="flex flex-col items-center text-xs text-gray-500 hover:text-violet-700">
+      <span class="text-2xl">📄</span><span>Faturas</span>
+    </a>
+  </nav>
+
+  <style>
+    .inp { display:block; width:100%; border:1px solid #e5e7eb; border-radius:0.75rem; padding:0.625rem 1rem; font-size:0.875rem; outline:none; }
+    .inp:focus { border-color:#7c3aed; box-shadow:0 0 0 2px #ede9fe; }
+  </style>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    let todasTurmas    = [];
+    let todasMatriculas = [];
+    let todosAlunos    = [];
+
+    async function init() {
+      try {
+        [todasTurmas, todasMatriculas, todosAlunos] = await Promise.all([
+          API.getTurmas(), API.getMatriculas(), API.getAlunos()
+        ]);
+        renderLista();
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('lista-turmas').classList.remove('hidden');
+      } catch (err) {
+        document.getElementById('loading').innerHTML = `<p class="text-red-500">Erro: ${err.message}</p>`;
+      }
+    }
+
+    function renderLista() {
+      const container = document.getElementById('lista-turmas');
+      container.innerHTML = '';
+      const ativas = todasTurmas.filter(t => String(t.ativo) !== 'false');
+
+      if (ativas.length === 0) {
+        document.getElementById('vazio').classList.remove('hidden');
+        return;
+      }
+      document.getElementById('vazio').classList.add('hidden');
+
+      ativas.forEach(t => {
+        const matriculasAtivas = todasMatriculas.filter(m => String(m.turma_id) === String(t.id) && !m.fim);
+        const alunosNomes = matriculasAtivas.map(m => {
+          const a = todosAlunos.find(a => String(a.id) === String(m.aluno_id));
+          return a ? a.nome : null;
+        }).filter(Boolean);
+
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-2xl p-4 shadow-sm';
+        card.innerHTML = `
+          <div class="flex items-start justify-between">
+            <div>
+              <h3 class="font-bold text-gray-800">${t.nome}</h3>
+              <p class="text-sm text-gray-500">${[t.modalidade, t.dia, t.horario].filter(Boolean).join(' · ')}</p>
+            </div>
+            <div class="text-right">
+              <p class="font-bold text-violet-700">${Utils.formatarValor(t.mensalidade)}</p>
+              <p class="text-xs text-gray-400">por mês</p>
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+              ${matriculasAtivas.length} aluno(s)
+            </p>
+            ${alunosNomes.length > 0
+              ? `<div class="flex flex-wrap gap-1">${alunosNomes.map(n =>
+                  `<span class="text-xs bg-violet-50 text-violet-700 px-2 py-0.5 rounded-full">${n.split(' ')[0]}</span>`
+                ).join('')}</div>`
+              : `<p class="text-xs text-gray-400 italic">Nenhum aluno matriculado</p>`
+            }
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    async function salvarTurma(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-salvar-turma');
+      btn.disabled = true; btn.textContent = 'Salvando...';
+
+      const row = {
+        nome:        document.getElementById('t-nome').value.trim(),
+        modalidade:  document.getElementById('t-modalidade').value.trim(),
+        dia:         document.getElementById('t-dia').value,
+        horario:     document.getElementById('t-horario').value.trim(),
+        mensalidade: document.getElementById('t-mensalidade').value,
+        ativo:       'true',
+      };
+
+      try {
+        await API.saveTurma(row);
+        Utils.mostrarSucesso('Turma criada!');
+        document.getElementById('form-nova').classList.add('hidden');
+        e.target.reset();
+        await init();
+      } catch (err) {
+        Utils.mostrarErro(err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Salvar';
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

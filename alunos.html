@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alunos — oGrupo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 max-w-lg mx-auto min-h-screen pb-24">
+
+  <div id="toast" class="hidden"></div>
+
+  <!-- Header -->
+  <header class="bg-violet-700 text-white px-4 py-4 sticky top-0 z-40 shadow">
+    <div class="flex items-center justify-between">
+      <h1 class="text-xl font-bold">Alunos</h1>
+      <button onclick="abrirModalNovo()"
+        class="bg-white text-violet-700 font-bold px-4 py-1.5 rounded-xl text-sm hover:bg-violet-50 active:scale-95 transition-all">
+        + Novo
+      </button>
+    </div>
+    <!-- Busca -->
+    <input id="busca" type="search" placeholder="Buscar aluno..." autocomplete="off"
+      class="mt-3 w-full px-4 py-2 rounded-xl text-gray-800 text-sm placeholder-gray-400 outline-none"
+      oninput="filtrarAlunos()">
+  </header>
+
+  <main class="p-4">
+    <div id="loading" class="text-center py-12 text-gray-400"><div class="text-4xl mb-2">⏳</div><p>Carregando...</p></div>
+    <div id="lista-alunos" class="space-y-2 hidden"></div>
+    <p id="vazio" class="hidden text-center text-gray-400 py-8">Nenhum aluno encontrado.</p>
+  </main>
+
+  <!-- Bottom nav -->
+  <nav class="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white border-t border-gray-200 flex justify-around py-2 z-50">
+    <a href="index.html" class="flex flex-col items-center text-xs text-gray-500 hover:text-violet-700">
+      <span class="text-2xl">🏠</span><span>Início</span>
+    </a>
+    <a href="alunos.html" class="flex flex-col items-center text-xs text-violet-700 font-medium">
+      <span class="text-2xl">👥</span><span>Alunos</span>
+    </a>
+    <a href="turmas.html" class="flex flex-col items-center text-xs text-gray-500 hover:text-violet-700">
+      <span class="text-2xl">💃</span><span>Turmas</span>
+    </a>
+    <a href="faturas.html" class="flex flex-col items-center text-xs text-gray-500 hover:text-violet-700">
+      <span class="text-2xl">📄</span><span>Faturas</span>
+    </a>
+  </nav>
+
+  <!-- ═══ MODAL: Novo / Editar Aluno ═══════════════════════════════ -->
+  <div id="modal-aluno" class="hidden fixed inset-0 bg-black/50 z-50 flex items-end justify-center">
+    <div class="bg-white w-full max-w-lg rounded-t-3xl max-h-[90vh] overflow-y-auto">
+      <div class="p-4 border-b border-gray-100 flex items-center justify-between">
+        <h2 class="font-bold text-gray-800" id="modal-titulo">Novo Aluno</h2>
+        <button onclick="fecharModal('modal-aluno')" class="text-gray-400 text-2xl leading-none">&times;</button>
+      </div>
+      <form id="form-aluno" onsubmit="salvarAluno(event)" class="p-4 space-y-3">
+        <input type="hidden" id="aluno-id">
+
+        <p class="text-xs font-semibold text-violet-700 uppercase tracking-wide">Dados do aluno</p>
+        <input type="text"   id="aluno-nome"       placeholder="Nome completo *" required
+          class="inp">
+        <input type="tel"    id="aluno-telefone"   placeholder="Telefone / WhatsApp"
+          class="inp">
+        <input type="email"  id="aluno-email"      placeholder="E-mail"
+          class="inp">
+        <input type="text"   id="aluno-cpf"        placeholder="CPF"
+          class="inp">
+        <input type="date"   id="aluno-nascimento" placeholder="Data de nascimento"
+          class="inp">
+        <textarea            id="aluno-obs"        placeholder="Observações" rows="2"
+          class="inp resize-none"></textarea>
+
+        <p class="text-xs font-semibold text-violet-700 uppercase tracking-wide mt-4">Responsável (opcional)</p>
+        <input type="text" id="aluno-resp-nome"     placeholder="Nome do responsável" class="inp">
+        <input type="tel"  id="aluno-resp-telefone" placeholder="Telefone do responsável" class="inp">
+        <input type="text" id="aluno-resp-cpf"      placeholder="CPF do responsável" class="inp">
+
+        <div class="pt-2 flex gap-2">
+          <button type="button" onclick="fecharModal('modal-aluno')"
+            class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium">Cancelar</button>
+          <button type="submit" id="btn-salvar-aluno"
+            class="flex-1 py-3 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══ MODAL: Detalhe do Aluno ══════════════════════════════════ -->
+  <div id="modal-detalhe" class="hidden fixed inset-0 bg-black/50 z-50 flex items-end justify-center">
+    <div class="bg-white w-full max-w-lg rounded-t-3xl max-h-[90vh] overflow-y-auto">
+      <div class="p-4 border-b border-gray-100 flex items-center justify-between">
+        <h2 class="font-bold text-gray-800 truncate pr-4" id="detalhe-nome">Aluno</h2>
+        <button onclick="fecharModal('modal-detalhe')" class="text-gray-400 text-2xl leading-none flex-shrink-0">&times;</button>
+      </div>
+      <div class="p-4 space-y-4" id="detalhe-conteudo"><!-- preenchido por JS --></div>
+    </div>
+  </div>
+
+  <style>
+    .inp { display:block; width:100%; border:1px solid #e5e7eb; border-radius:0.75rem; padding:0.625rem 1rem; font-size:0.875rem; outline:none; }
+    .inp:focus { border-color:#7c3aed; box-shadow:0 0 0 2px #ede9fe; }
+  </style>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    let todosAlunos    = [];
+    let todasTurmas    = [];
+    let todasMatriculas = [];
+    let todasFaturas   = [];
+    let todosPagamentos = [];
+
+    // ── Inicialização ──────────────────────────────────────
+    async function init() {
+      try {
+        [todosAlunos, todasTurmas, todasMatriculas, todasFaturas, todosPagamentos] = await Promise.all([
+          API.getAlunos(), API.getTurmas(), API.getMatriculas(), API.getFaturas(), API.getPagamentos()
+        ]);
+        renderLista(todosAlunos.filter(a => String(a.ativo) !== 'false'));
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('lista-alunos').classList.remove('hidden');
+      } catch (err) {
+        document.getElementById('loading').innerHTML = `<p class="text-red-500">Erro: ${err.message}</p>`;
+      }
+    }
+
+    function filtrarAlunos() {
+      const q = document.getElementById('busca').value.toLowerCase();
+      const lista = todosAlunos.filter(a =>
+        String(a.ativo) !== 'false' &&
+        (a.nome || '').toLowerCase().includes(q)
+      );
+      renderLista(lista);
+    }
+
+    function renderLista(lista) {
+      const container = document.getElementById('lista-alunos');
+      const vazio = document.getElementById('vazio');
+      container.innerHTML = '';
+
+      if (lista.length === 0) {
+        vazio.classList.remove('hidden');
+        return;
+      }
+      vazio.classList.add('hidden');
+
+      lista.forEach(a => {
+        const mats = todasMatriculas.filter(m => String(m.aluno_id) === String(a.id) && !m.fim);
+        const turmasNomes = mats.map(m => {
+          const t = todasTurmas.find(t => String(t.id) === String(m.turma_id));
+          return t ? t.nome : '?';
+        });
+
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-2xl px-4 py-3 shadow-sm flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow active:scale-[0.99]';
+        card.onclick = () => abrirDetalhe(a.id);
+        card.innerHTML = `
+          <div class="min-w-0">
+            <p class="font-semibold text-gray-800 truncate">${a.nome}</p>
+            <p class="text-xs text-gray-500 truncate">${turmasNomes.length ? turmasNomes.join(', ') : 'Sem turma'}</p>
+          </div>
+          <span class="text-violet-400 text-xl ml-2 flex-shrink-0">›</span>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    // ── Detalhe ────────────────────────────────────────────
+    function abrirDetalhe(alunoId) {
+      const a = todosAlunos.find(x => String(x.id) === String(alunoId));
+      if (!a) return;
+
+      document.getElementById('detalhe-nome').textContent = a.nome;
+      const div = document.getElementById('detalhe-conteudo');
+
+      const mats = todasMatriculas.filter(m => String(m.aluno_id) === String(a.id) && !m.fim);
+      const faturasAluno = todasFaturas.filter(f => String(f.aluno_id) === String(a.id));
+      const pagamentosAluno = todosPagamentos.filter(p =>
+        faturasAluno.some(f => String(f.id) === String(p.fatura_id))
+      );
+
+      const turmaOpts = todasTurmas
+        .filter(t => String(t.ativo) !== 'false')
+        .filter(t => !mats.some(m => String(m.turma_id) === String(t.id)))
+        .map(t => `<option value="${t.id}">${t.nome} — ${Utils.formatarValor(t.mensalidade)}/mês</option>`)
+        .join('');
+
+      const faturasHTML = faturasAluno.slice(-6).reverse().map(f => {
+        const s = Utils.statusLabel(f.status);
+        return `
+          <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+            <div>
+              <p class="text-sm font-medium text-gray-700">${Utils.formatarMes(f.mes)}</p>
+              <p class="text-xs text-gray-400">Venc. ${Utils.formatarData(f.vencimento)}</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-semibold">${Utils.formatarValor(f.valor)}</span>
+              <span class="text-xs px-2 py-0.5 rounded-full ${s.cls}">${s.text}</span>
+              ${f.status === 'pendente' ? `<button onclick="pagarFatura('${f.id}')" class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-lg font-medium hover:bg-green-200">Pagar</button>` : ''}
+            </div>
+          </div>`;
+      }).join('');
+
+      div.innerHTML = `
+        <!-- Info básica -->
+        <div class="space-y-1 text-sm text-gray-700">
+          ${a.telefone ? `<p>📞 <a href="tel:${Utils.fone(a.telefone)}" class="text-violet-700">${a.telefone}</a></p>` : ''}
+          ${a.email    ? `<p>✉️ ${a.email}</p>` : ''}
+          ${a.cpf      ? `<p>🪪 CPF: ${a.cpf}</p>` : ''}
+          ${a.nascimento ? `<p>🎂 ${Utils.formatarData(a.nascimento)}</p>` : ''}
+          ${a.obs      ? `<p class="text-gray-500 italic">${a.obs}</p>` : ''}
+        </div>
+
+        ${a.resp_nome ? `
+        <div class="bg-violet-50 rounded-xl p-3 text-sm text-gray-700 space-y-0.5">
+          <p class="font-semibold text-violet-800">Responsável</p>
+          <p>${a.resp_nome}</p>
+          ${a.resp_telefone ? `<p>📞 <a href="tel:${Utils.fone(a.resp_telefone)}" class="text-violet-700">${a.resp_telefone}</a></p>` : ''}
+        </div>` : ''}
+
+        <!-- Turmas ativas -->
+        <div>
+          <p class="font-semibold text-gray-700 mb-2">Turmas</p>
+          ${mats.length === 0 ? '<p class="text-sm text-gray-400">Sem turma ativa</p>' : mats.map(m => {
+            const t = todasTurmas.find(t => String(t.id) === String(m.turma_id));
+            return t ? `
+              <div class="flex items-center justify-between bg-violet-50 rounded-xl px-3 py-2 mb-1">
+                <div>
+                  <p class="text-sm font-medium text-violet-800">${t.nome}</p>
+                  <p class="text-xs text-violet-500">${t.dia || ''} ${t.horario || ''} · ${Utils.formatarValor(m.mensalidade_custom || t.mensalidade)}/mês</p>
+                </div>
+                <button onclick="removerMatricula('${m.id}', '${t.nome}')"
+                  class="text-xs text-red-400 hover:text-red-600 ml-2">✕</button>
+              </div>` : '';
+          }).join('')}
+
+          ${turmaOpts ? `
+          <div class="flex gap-2 mt-2">
+            <select id="sel-turma-${a.id}" class="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm">
+              <option value="">Adicionar turma...</option>
+              ${turmaOpts}
+            </select>
+            <button onclick="adicionarMatricula('${a.id}')"
+              class="bg-violet-600 text-white px-3 py-2 rounded-xl text-sm font-medium hover:bg-violet-700">
+              +
+            </button>
+          </div>` : ''}
+        </div>
+
+        <!-- Registrar pagamento manual -->
+        <details class="bg-gray-50 rounded-xl">
+          <summary class="px-4 py-3 font-semibold text-gray-700 cursor-pointer text-sm">
+            💰 Registrar pagamento manual
+          </summary>
+          <form onsubmit="registrarPagamento(event, '${a.id}')" class="px-4 pb-4 space-y-2 mt-2">
+            <select id="pag-fatura-${a.id}" class="inp text-sm">
+              <option value="">Sem fatura vinculada</option>
+              ${faturasAluno.filter(f => f.status === 'pendente').map(f =>
+                `<option value="${f.id}">${Utils.formatarMes(f.mes)} — ${Utils.formatarValor(f.valor)}</option>`
+              ).join('')}
+            </select>
+            <div class="flex gap-2">
+              <input type="number" step="0.01" id="pag-valor-${a.id}" placeholder="Valor R$" required class="inp text-sm flex-1">
+              <input type="date"   id="pag-data-${a.id}"  value="${Utils.hoje()}" required class="inp text-sm flex-1">
+            </div>
+            <input type="text" id="pag-desc-${a.id}" placeholder="Descrição" class="inp text-sm">
+            <select id="pag-metodo-${a.id}" class="inp text-sm">
+              <option value="pix">PIX</option>
+              <option value="dinheiro">Dinheiro</option>
+              <option value="cartao">Cartão</option>
+              <option value="transferencia">Transferência</option>
+            </select>
+            <button type="submit" class="w-full py-2.5 bg-green-600 text-white rounded-xl font-medium text-sm hover:bg-green-700">
+              Registrar pagamento
+            </button>
+          </form>
+        </details>
+
+        <!-- Histórico de faturas -->
+        <div>
+          <p class="font-semibold text-gray-700 mb-2">Histórico de faturas</p>
+          ${faturasHTML || '<p class="text-sm text-gray-400">Nenhuma fatura ainda</p>'}
+        </div>
+
+        <!-- Ações -->
+        <div class="flex gap-2 pt-2">
+          <button onclick="editarAluno('${a.id}')"
+            class="flex-1 py-2.5 bg-violet-50 text-violet-700 rounded-xl font-medium text-sm hover:bg-violet-100">
+            ✏️ Editar
+          </button>
+          ${a.telefone ? `
+          <a href="${Utils.whatsapp(a.telefone, `Olá ${(a.nome||'').split(' ')[0]}!`)}"
+            target="_blank"
+            class="flex-1 py-2.5 bg-green-50 text-green-700 rounded-xl font-medium text-sm text-center hover:bg-green-100">
+            💬 WhatsApp
+          </a>` : ''}
+        </div>
+
+        <button onclick="desativarAluno('${a.id}', '${a.nome}')"
+          class="w-full py-2 text-red-400 text-sm hover:text-red-600">
+          Desativar aluno
+        </button>
+      `;
+
+      document.getElementById('modal-detalhe').classList.remove('hidden');
+    }
+
+    // ── Ações ──────────────────────────────────────────────
+    async function pagarFatura(faturaId) {
+      try {
+        await API.updateFatura(faturaId, { status: 'pago' });
+        Utils.mostrarSucesso('Fatura marcada como paga!');
+        fecharModal('modal-detalhe');
+        await init();
+      } catch (err) {
+        Utils.mostrarErro(err.message);
+      }
+    }
+
+    async function adicionarMatricula(alunoId) {
+      const sel = document.getElementById(`sel-turma-${alunoId}`);
+      const turmaId = sel.value;
+      if (!turmaId) return;
+      try {
+        await API.saveMatricula({
+          aluno_id: alunoId,
+          turma_id: turmaId,
+          inicio: Utils.hoje(),
+          fim: '',
+          mensalidade_custom: ''
+        });
+        Utils.mostrarSucesso('Turma adicionada!');
+        fecharModal('modal-detalhe');
+        await init();
+        setTimeout(() => abrirDetalhe(alunoId), 300);
+      } catch (err) {
+        Utils.mostrarErro(err.message);
+      }
+    }
+
+    async function removerMatricula(matriculaId, turmaName) {
+      if (!confirm(`Remover aluno da turma "${turmaName}"?`)) return;
+      try {
+        await API.removeMatricula(matriculaId, Utils.hoje());
+        Utils.mostrarSucesso('Aluno removido da turma');
+        const alunoId = document.getElementById('detalhe-conteudo').querySelector('[id^="sel-turma-"]')?.id?.replace('sel-turma-', '');
+        fecharModal('modal-detalhe');
+        await init();
+        if (alunoId) setTimeout(() => abrirDetalhe(alunoId), 300);
+      } catch (err) {
+        Utils.mostrarErro(err.message);
+      }
+    }
+
+    async function registrarPagamento(e, alunoId) {
+      e.preventDefault();
+      const faturaId = document.getElementById(`pag-fatura-${alunoId}`).value;
+      const valor    = document.getElementById(`pag-valor-${alunoId}`).value;
+      const data     = document.getElementById(`pag-data-${alunoId}`).value;
+      const desc     = document.getElementById(`pag-desc-${alunoId}`).value;
+      const metodo   = document.getElementById(`pag-metodo-${alunoId}`).value;
+      try {
+        await API.savePagamento({ fatura_id: faturaId || '', data, valor, descricao: desc, metodo });
+        if (faturaId) {
+          await API.updateFatura(faturaId, { status: 'pago' });
+        }
+        Utils.mostrarSucesso('Pagamento registrado!');
+        fecharModal('modal-detalhe');
+        await init();
+      } catch (err) {
+        Utils.mostrarErro(err.message);
+      }
+    }
+
+    async function desativarAluno(id, nome) {
+      if (!confirm(`Desativar "${nome}"? O histórico será mantido.`)) return;
+      try {
+        await API.desativarAluno(id);
+        Utils.mostrarSucesso('Aluno desativado');
+        fecharModal('modal-detalhe');
+        await init();
+      } catch (err) {
+        Utils.mostrarErro(err.message);
+      }
+    }
+
+    // ── Modal novo/editar ──────────────────────────────────
+    function abrirModalNovo() {
+      document.getElementById('modal-titulo').textContent = 'Novo Aluno';
+      document.getElementById('form-aluno').reset();
+      document.getElementById('aluno-id').value = '';
+      document.getElementById('modal-aluno').classList.remove('hidden');
+    }
+
+    function editarAluno(id) {
+      const a = todosAlunos.find(x => String(x.id) === String(id));
+      if (!a) return;
+      document.getElementById('modal-titulo').textContent = 'Editar Aluno';
+      document.getElementById('aluno-id').value = a.id;
+      document.getElementById('aluno-nome').value       = a.nome || '';
+      document.getElementById('aluno-telefone').value   = a.telefone || '';
+      document.getElementById('aluno-email').value      = a.email || '';
+      document.getElementById('aluno-cpf').value        = a.cpf || '';
+      document.getElementById('aluno-nascimento').value = a.nascimento ? String(a.nascimento).split('T')[0] : '';
+      document.getElementById('aluno-obs').value        = a.obs || '';
+      document.getElementById('aluno-resp-nome').value     = a.resp_nome || '';
+      document.getElementById('aluno-resp-telefone').value = a.resp_telefone || '';
+      document.getElementById('aluno-resp-cpf').value      = a.resp_cpf || '';
+      fecharModal('modal-detalhe');
+      document.getElementById('modal-aluno').classList.remove('hidden');
+    }
+
+    async function salvarAluno(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-salvar-aluno');
+      btn.disabled = true; btn.textContent = 'Salvando...';
+
+      const id = document.getElementById('aluno-id').value;
+      const row = {
+        nome:          document.getElementById('aluno-nome').value.trim(),
+        telefone:      document.getElementById('aluno-telefone').value.trim(),
+        email:         document.getElementById('aluno-email').value.trim(),
+        cpf:           document.getElementById('aluno-cpf').value.trim(),
+        nascimento:    document.getElementById('aluno-nascimento').value,
+        obs:           document.getElementById('aluno-obs').value.trim(),
+        ativo:         'true',
+        resp_nome:     document.getElementById('aluno-resp-nome').value.trim(),
+        resp_telefone: document.getElementById('aluno-resp-telefone').value.trim(),
+        resp_cpf:      document.getElementById('aluno-resp-cpf').value.trim(),
+      };
+
+      try {
+        if (id) {
+          await API.updateAluno(id, row);
+          Utils.mostrarSucesso('Aluno atualizado!');
+        } else {
+          await API.saveAluno(row);
+          Utils.mostrarSucesso('Aluno cadastrado!');
+        }
+        fecharModal('modal-aluno');
+        await init();
+      } catch (err) {
+        Utils.mostrarErro(err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Salvar';
+      }
+    }
+
+    function fecharModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    // Fechar modal ao clicar fora
+    ['modal-aluno','modal-detalhe'].forEach(id => {
+      document.getElementById(id).addEventListener('click', e => {
+        if (e.target.id === id) fecharModal(id);
+      });
+    });
+
+    init();
+  </script>
+</body>
+</html>

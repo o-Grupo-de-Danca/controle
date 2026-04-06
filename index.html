@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>oGrupo de Dança</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 max-w-lg mx-auto min-h-screen pb-24">
+
+  <!-- Toast -->
+  <div id="toast" class="hidden"></div>
+
+  <!-- Header -->
+  <header class="bg-violet-700 text-white px-4 py-4 sticky top-0 z-40 shadow">
+    <h1 class="text-xl font-bold">oGrupo de Dança</h1>
+    <p class="text-violet-200 text-sm" id="subtitulo">Carregando...</p>
+  </header>
+
+  <main class="p-4 space-y-4">
+
+    <!-- Erro de configuração -->
+    <div id="aviso-config" class="hidden bg-amber-50 border border-amber-300 rounded-2xl p-4 text-amber-800 text-sm">
+      <p class="font-semibold">⚙️ Configure a API primeiro</p>
+      <p class="mt-1">Edite o arquivo <code class="bg-amber-100 px-1 rounded">js/config.js</code> e cole a URL do seu Google Apps Script.</p>
+      <p class="mt-1">Siga as instruções em <code class="bg-amber-100 px-1 rounded">apps-script/Code.gs</code>.</p>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading" class="text-center py-12 text-gray-400">
+      <div class="text-4xl mb-2">⏳</div>
+      <p>Carregando dados...</p>
+    </div>
+
+    <!-- Conteúdo principal -->
+    <div id="content" class="hidden space-y-4">
+
+      <!-- Cards de resumo -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-white rounded-2xl p-4 shadow-sm">
+          <div class="text-3xl font-bold text-violet-700" id="stat-alunos">—</div>
+          <div class="text-sm text-gray-500 mt-1">Alunos ativos</div>
+        </div>
+        <div class="bg-white rounded-2xl p-4 shadow-sm">
+          <div class="text-3xl font-bold text-green-600" id="stat-recebido">—</div>
+          <div class="text-sm text-gray-500 mt-1" id="stat-recebido-label">Recebido este mês</div>
+        </div>
+        <div class="bg-white rounded-2xl p-4 shadow-sm">
+          <div class="text-3xl font-bold text-orange-500" id="stat-pendentes">—</div>
+          <div class="text-sm text-gray-500 mt-1">Aguardando pagto.</div>
+        </div>
+        <div class="bg-white rounded-2xl p-4 shadow-sm">
+          <div class="text-3xl font-bold text-red-500" id="stat-vencidas">—</div>
+          <div class="text-sm text-gray-500 mt-1">Vencidas</div>
+        </div>
+      </div>
+
+      <!-- Ações rápidas -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm space-y-3">
+        <h2 class="font-semibold text-gray-700">Ações rápidas</h2>
+
+        <button onclick="gerarFaturas()" id="btn-gerar"
+          class="w-full py-3 px-4 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700 active:scale-95 transition-all text-left">
+          📅 Gerar faturas — <span id="label-mes"></span>
+        </button>
+
+        <a href="faturas.html?filtro=vencida"
+          class="flex items-center w-full py-3 px-4 bg-red-50 text-red-700 rounded-xl font-medium hover:bg-red-100 transition-colors">
+          ⚠️ Ver inadimplentes
+        </a>
+
+        <a href="alunos.html"
+          class="flex items-center w-full py-3 px-4 bg-violet-50 text-violet-700 rounded-xl font-medium hover:bg-violet-100 transition-colors">
+          👥 Gerenciar alunos
+        </a>
+
+        <a href="turmas.html"
+          class="flex items-center w-full py-3 px-4 bg-violet-50 text-violet-700 rounded-xl font-medium hover:bg-violet-100 transition-colors">
+          💃 Gerenciar turmas
+        </a>
+      </div>
+
+      <!-- Faturas recentes vencidas -->
+      <div id="secao-vencidas" class="hidden bg-white rounded-2xl p-4 shadow-sm">
+        <h2 class="font-semibold text-gray-700 mb-3">⚠️ Vencidas recentes</h2>
+        <div id="lista-vencidas" class="space-y-2"></div>
+        <a href="faturas.html?filtro=vencida" class="block mt-3 text-center text-violet-600 text-sm font-medium">Ver todas →</a>
+      </div>
+
+    </div>
+
+    <!-- Erro de API -->
+    <div id="erro-api" class="hidden bg-red-50 border border-red-200 rounded-2xl p-4 text-red-700 text-sm">
+      <p class="font-semibold">Erro ao carregar dados</p>
+      <p class="mt-1" id="erro-msg"></p>
+    </div>
+
+  </main>
+
+  <!-- Bottom nav -->
+  <nav class="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white border-t border-gray-200 flex justify-around py-2 z-50">
+    <a href="index.html" class="flex flex-col items-center text-xs text-violet-700 font-medium">
+      <span class="text-2xl">🏠</span><span>Início</span>
+    </a>
+    <a href="alunos.html" class="flex flex-col items-center text-xs text-gray-500 hover:text-violet-700">
+      <span class="text-2xl">👥</span><span>Alunos</span>
+    </a>
+    <a href="turmas.html" class="flex flex-col items-center text-xs text-gray-500 hover:text-violet-700">
+      <span class="text-2xl">💃</span><span>Turmas</span>
+    </a>
+    <a href="faturas.html" class="flex flex-col items-center text-xs text-gray-500 hover:text-violet-700">
+      <span class="text-2xl">📄</span><span>Faturas</span>
+    </a>
+  </nav>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    const mesAtual = Utils.mesAtual();
+    document.getElementById('label-mes').textContent = Utils.formatarMes(mesAtual);
+    document.getElementById('subtitulo').textContent = Utils.formatarMes(mesAtual);
+
+    async function init() {
+      if (!CONFIG.API_URL) {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('aviso-config').classList.remove('hidden');
+        return;
+      }
+
+      try {
+        const [alunos, faturas] = await Promise.all([
+          API.getAlunos(),
+          API.getFaturas()
+        ]);
+
+        const hoje = Utils.hoje();
+        const alunosAtivos = alunos.filter(a => String(a.ativo) === 'true');
+        const pagas = faturas.filter(f => f.status === 'pago' && f.mes === mesAtual);
+        const pendentes = faturas.filter(f => f.status === 'pendente' && String(f.vencimento) >= hoje);
+        const vencidas = faturas.filter(f => f.status === 'pendente' && String(f.vencimento) < hoje);
+
+        document.getElementById('stat-alunos').textContent = alunosAtivos.length;
+        document.getElementById('stat-recebido').textContent = Utils.formatarValor(
+          pagas.reduce((s, f) => s + parseFloat(f.valor || 0), 0)
+        );
+        document.getElementById('stat-pendentes').textContent = pendentes.length;
+        document.getElementById('stat-vencidas').textContent = vencidas.length;
+
+        // Mostrar até 3 vencidas
+        if (vencidas.length > 0) {
+          const alunosMap = {};
+          alunos.forEach(a => { alunosMap[a.id] = a; });
+
+          const secao = document.getElementById('secao-vencidas');
+          const lista = document.getElementById('lista-vencidas');
+          secao.classList.remove('hidden');
+
+          vencidas.slice(0, 3).forEach(f => {
+            const aluno = alunosMap[f.aluno_id];
+            if (!aluno) return;
+            const div = document.createElement('div');
+            div.className = 'flex items-center justify-between py-2 border-b border-gray-100 last:border-0';
+            div.innerHTML = `
+              <div>
+                <p class="font-medium text-gray-800 text-sm">${aluno.nome}</p>
+                <p class="text-xs text-gray-500">${Utils.formatarMes(f.mes)} · venc. ${Utils.formatarData(f.vencimento)}</p>
+              </div>
+              <span class="text-sm font-semibold text-red-600">${Utils.formatarValor(f.valor)}</span>
+            `;
+            lista.appendChild(div);
+          });
+        }
+
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('content').classList.remove('hidden');
+
+      } catch (err) {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('erro-api').classList.remove('hidden');
+        document.getElementById('erro-msg').textContent = err.message;
+      }
+    }
+
+    async function gerarFaturas() {
+      const btn = document.getElementById('btn-gerar');
+      btn.disabled = true;
+      btn.textContent = '⏳ Gerando...';
+      try {
+        const result = await API.gerarFaturas(mesAtual);
+        Utils.mostrarSucesso(`${result.criadas} fatura(s) gerada(s) para ${Utils.formatarMes(mesAtual)}`);
+        setTimeout(init, 1500);
+      } catch (err) {
+        Utils.mostrarErro(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `📅 Gerar faturas — <span id="label-mes">${Utils.formatarMes(mesAtual)}</span>`;
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
